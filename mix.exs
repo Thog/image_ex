@@ -3,8 +3,8 @@ defmodule ImageEx.Mixfile do
 
   def project do
     [app: :image_ex,
-     version: "0.1.0",
-     elixir: "~> 1.3",
+     version: "0.1.1",
+     elixir: "~> 1.5",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      deps: deps()]
@@ -21,8 +21,8 @@ defmodule ImageEx.Mixfile do
       {:ewebmachine, git: "https://github.com/kbrw/ewebmachine.git", branch: "master"},
       {:cowboy, "~> 1.1"},
       {:timex, "~> 3.1"},
-      {:plug, "~> 1.3", override: true},
-      {:exrm, "~> 1.0"}
+      {:plug, "~> 1.4", override: true},
+      {:distillery, "~> 1.5"}
     ]
   end
 end
