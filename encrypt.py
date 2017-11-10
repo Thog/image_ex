@@ -64,5 +64,5 @@ os.remove(output_file)
 os.rename(output_file + ".tmp", output_file)
 
 if (identical_in_out):
-    os.remove(input_file)
+    os.rename(input_file, input_file + "_plain")
     os.rename(output_file, input_file)

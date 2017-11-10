@@ -137,7 +137,7 @@ defmodule ImageEx.Utils do
     end
 
     defp decrypt_file_stream(file, key, iv) do
-      last_index = round(File.stat!(file).size / @aes_block_size)
+      last_index = round(Float.ceil(File.stat!(file).size / @aes_block_size))
       File.stream!(file, [], @aes_block_size) |> Stream.with_index(1) |> Stream.drop(div(64, @aes_block_size)) |> Stream.transform(iv, fn ({data, index}, vector) ->
         res = :crypto.block_decrypt(:aes_cbc256, key, vector, data)
         res = case index == last_index do

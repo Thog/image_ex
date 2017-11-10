@@ -53,9 +53,9 @@ defmodule ImageEx.HTTP do
         %{"upload" => upload} ->
           filename = :crypto.strong_rand_bytes(16) |> Base.encode16 |> String.downcase
           extention = String.split(upload.filename, ".") |> List.last
-          case ImageEx.Utils.Crypto.decrypt_file_stream(upload.path) do
-            {:ok,stream} ->
-              stream |> Stream.run
+          case ImageEx.Utils.Crypto.decrypt_file(upload.path) |> IO.inspect do
+            {:ok,data} ->
+              #stream |> Stream.run
               case File.rename(upload.path, "#{Application.get_env(:image_ex, :path)}/bucket/#{filename}.#{extention}") do
                 :ok ->
                   {true,conn |> Plug.Conn.put_private(:resp_redirect, true) |> Plug.Conn.put_resp_header("location", "#{ImageEx.Utils.get_base_uri(conn)}/#{filename}.#{extention}"),state}
