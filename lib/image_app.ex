@@ -19,8 +19,8 @@ defmodule ImageEx.HTTP do
   plug :match
   plug :dispatch
   plug Plug.Parsers, parsers: [:urlencoded, :multipart]
-
   resources_plugs nomatch_404: true
+
   resource "/upload" do %{} after
     allowed_methods do: ["POST"]
     process_post do
@@ -29,18 +29,22 @@ defmodule ImageEx.HTTP do
           filename = :crypto.strong_rand_bytes(16) |> Base.encode16 |> String.downcase
           extention = String.split(upload.filename, ".") |> List.last
           case ImageEx.Utils.Crypto.decrypt_file_stream(upload.path) do
-            {:ok,stream} ->
-              stream |> Stream.run
-              case File.rename(upload.path, "#{Application.get_env(:image_ex, :path)}/bucket/#{filename}.#{extention}") do
-                :ok ->
-                  {true,conn |> Plug.Conn.put_private(:resp_redirect, true) |> Plug.Conn.put_resp_header("location", "#{ImageEx.Utils.get_base_uri(conn)}/#{filename}.#{extention}"),state}
-                {:error, _} ->
-                  {true,conn |> resp(500, "FAIL"),state}
+            {:ok, hash, stream} ->
+              computed_hash = stream |> Enum.reduce(:crypto.hash_init(:sha256), fn (data, acc) -> :crypto.hash_update(acc, data) end) |> :crypto.hash_final
+              if computed_hash == hash do
+                case File.rename(upload.path, "#{Application.get_env(:image_ex, :path)}/bucket/#{filename}.#{extention}") do
+                  :ok ->
+                    {true,conn |> Plug.Conn.put_private(:resp_redirect, true) |> Plug.Conn.put_resp_header("location", "#{ImageEx.Utils.get_base_uri(conn)}/#{filename}.#{extention}"),state}
+                  {:error, _} ->
+                    {{:halt, 500},%{conn | resp_body: "FAIL"},state}
+                end
+              else
+                {{:halt, 401},%{conn | resp_body: "FAIL"},state}
               end
             _ ->
-              {true,conn |> resp(401, "FAIL"),state}
+              {{:halt, 401},%{conn | resp_body: "FAIL"},state}
           end
-        _ -> {true,conn |> resp(401, "FAIL"),state}
+        _ -> {{:halt, 400},%{conn | resp_body: "FAIL"},state}
       end
     end
   end
@@ -49,7 +53,7 @@ defmodule ImageEx.HTTP do
     resource_exists do: File.regular?(path(state.path))
     content_types_provided do: [ {state.path |> MIME.from_path |> default_plain, :to_content} ]
     defh to_content do
-      {:ok, stream} = ImageEx.Utils.Crypto.decrypt_file_stream(path(state.path))
+      {:ok, _, stream} = ImageEx.Utils.Crypto.decrypt_file_stream(path(state.path))
       stream
     end
     defp path(relative), do: "#{Application.get_env(:image_ex, :path)}/bucket/#{relative}"

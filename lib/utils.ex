@@ -130,8 +130,8 @@ defmodule ImageEx.Utils do
 
     def decrypt_file_stream(file, key \\ Application.get_env(:image_ex, :aes_key) |> Base.decode16!) do
       case ImageEx.Utils.read(file, 0, 64) do
-        <<@prefix, iv :: binary-size(16), _ :: binary-size(32)>> ->
-          {:ok, decrypt_file_stream(file, key, iv)}
+        <<@prefix, iv :: binary-size(16), hash :: binary-size(32)>> ->
+          {:ok, hash, decrypt_file_stream(file, key, iv)}
         _ -> {:error, :invalid_data}
       end
     end
