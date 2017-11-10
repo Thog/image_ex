@@ -100,7 +100,7 @@ defmodule ImageEx.HTTP do
     end
 
     defh to_content do
-      {:ok, stream} = ImageEx.Utils.Crypto.decrypt_file_stream(path(state.path))
+      {:ok, _, stream} = ImageEx.Utils.Crypto.decrypt_file_stream(path(state.path))
       stream
     end
     
