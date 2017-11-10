@@ -2,32 +2,8 @@ defmodule ImageEx.App do
   use Application
   import Supervisor.Spec, warn: false
   def start(_type, _args) do
-    Supervisor.start_link([Plug.Adapters.Cowboy.child_spec(:http, ImageEx.HTTP,[], port: 4242),
+    Supervisor.start_link([Plug.Adapters.Cowboy.child_spec(:http, ImageEx.HTTP,[], port: Application.get_env(:image_ex, :port, 4242)),
                             supervisor(ImageEx.Bucket, [])], strategy: :one_for_one)
-  end
-end
-
-defmodule ImageEx.API.Exceptions do
-  defmacro __using__(_opts) do
-    quote do @before_compile ImageEx.API.Exceptions end
-  end
-  defmacro __before_compile__(_) do
-    quote location: :keep do
-      defoverridable [call: 2]
-      def call(conn, opts) do
-        try do
-          super(conn, opts)
-        catch
-          kind, reason ->
-            stack = System.stacktrace
-            reason = Exception.normalize(kind, reason, stack)
-          status = case kind do x when x in [:error,:throw]-> Plug.Exception.status(reason); _-> 500 end
-            conn |> Plug.Conn.put_resp_content_type("application/json")
-            |> Plug.Conn.send_resp(status,Poison.encode!(%{state: "exception", reason: Exception.message(reason), trace: Exception.format(kind,reason,stack)}))
-            :erlang.raise kind,reason,stack
-        end
-      end
-    end
   end
 end
 
@@ -37,7 +13,6 @@ defmodule ImageEx.HTTP do
   use Plug.Router
   use Plug.Builder
   plug Ewebmachine.Plug.Debug
-  use ImageEx.API.Exceptions
   plug Plug.Logger
   plug :fetch_cookies
   plug :fetch_query_params
