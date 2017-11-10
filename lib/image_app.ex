@@ -24,11 +24,11 @@ defmodule ImageEx.HTTP do
   resource "/upload" do %{} after
     allowed_methods do: ["POST"]
     process_post do
-      case conn.params |> IO.inspect do
+      case conn.params do
         %{"upload" => upload} ->
           filename = :crypto.strong_rand_bytes(16) |> Base.encode16 |> String.downcase
           extention = String.split(upload.filename, ".") |> List.last
-          case ImageEx.Utils.Crypto.decrypt_file(upload.path) |> IO.inspect do
+          case ImageEx.Utils.Crypto.decrypt_file(upload.path) do
             {:ok,data} ->
               #stream |> Stream.run
               case File.rename(upload.path, "#{Application.get_env(:image_ex, :path)}/bucket/#{filename}.#{extention}") do
@@ -101,7 +101,7 @@ defmodule ImageEx.HTTP do
     end
     
     defh to_og, do: ImageEx.Utils.OpenGraph.generate_opengraph(conn, state, state.og_resource_type)
-    defp path(relative), do: "#{Application.get_env(:image_ex, :path)}/bucket/#{relative}" |> IO.inspect
+    defp path(relative), do: "#{Application.get_env(:image_ex, :path)}/bucket/#{relative}"
     defp default_plain(type), do: type
   end
 end
