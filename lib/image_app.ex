@@ -34,7 +34,7 @@ defmodule ImageEx.HTTP do
               if computed_hash == hash do
                 case File.rename(upload.path, "#{Application.get_env(:image_ex, :path)}/bucket/#{filename}.#{extention}") do
                   :ok ->
-                    {true,conn |> Plug.Conn.put_private(:resp_redirect, true) |> Plug.Conn.put_resp_header("location", "#{ImageEx.Utils.get_base_uri(conn)}/#{filename}.#{extention}"),state}
+                    {true,conn |> Plug.Conn.put_private(:resp_redirect, true) |> Plug.Conn.put_resp_header("location", "#{ImageEx.Utils.get_base_uri(conn)}#{filename}.#{extention}"),state}
                   {:error, _} ->
                     {{:halt, 500},%{conn | resp_body: "FAIL"},state}
                 end
