@@ -112,9 +112,6 @@ impl<T: Read + Seek + Sized> EncryptedBlob<T> {
 
             let mut hasher = Sha256::new();
 
-            let mut debug_decrypt = std::fs::File::create("debug_decrypt.bin").unwrap();
-            //let mut debug_encrypt = std::fs::File::create("debug_encrypt.bin").unwrap();
-
             while index != 0 {
                 let slice = if index < BUFFER_SIZE {
                     &mut internal_buffer[..index]
@@ -131,8 +128,6 @@ impl<T: Read + Seek + Sized> EncryptedBlob<T> {
 
                 index -= slice.len();
 
-                //debug_encrypt.write_all(&slice[..read_len]).unwrap();
-                debug_decrypt.write_all(&slice[..read_len]).unwrap();
                 hasher.input(&slice[..read_len]);
             }
 
