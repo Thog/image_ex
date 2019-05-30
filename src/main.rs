@@ -45,6 +45,7 @@ lazy_static! {
         }
     };
     pub static ref DOMAIN: String = std::env::var("DOMAIN").expect("DOMAIN must be set");
+    pub static ref IP: String = std::env::var("IP").expect("IP must be set");
     pub static ref PORT: String = std::env::var("PORT").expect("PORT must be set");
 }
 
@@ -156,7 +157,7 @@ fn main() -> std::io::Result<()> {
 
     let system = actix::System::new("imagers");
 
-    let bind_string = format!("{}:{}", DOMAIN.as_str(), PORT.as_str());
+    let bind_string = format!("{}:{}", IP.as_str(), PORT.as_str());
 
     HttpServer::new(|| {
         App::new()
