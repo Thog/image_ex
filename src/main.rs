@@ -28,23 +28,7 @@ use dotenv::dotenv;
 use lazy_static::lazy_static;
 
 lazy_static! {
-    pub static ref BASE_URL: String = {
-        let port = std::env::var("PORT");
-
-        if let Ok(port) = port {
-            format!(
-                "http://{}:{}",
-                std::env::var("DOMAIN").expect("DOMAIN must be set"),
-                port
-            )
-        } else {
-            format!(
-                "https://{}",
-                std::env::var("DOMAIN").expect("DOMAIN must be set")
-            )
-        }
-    };
-    pub static ref DOMAIN: String = std::env::var("DOMAIN").expect("DOMAIN must be set");
+    pub static ref BASE_URL: String = std::env::var("BASE_URL").expect("BASE_URL must be set");
     pub static ref IP: String = std::env::var("IP").expect("IP must be set");
     pub static ref PORT: String = std::env::var("PORT").expect("PORT must be set");
 }
