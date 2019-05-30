@@ -73,8 +73,6 @@ pub fn download_file(field: Field) -> impl Future<Item = String, Error = actix_w
 
     file_path.push(filename);
 
-    log::info!("{:?}", file_path);
-
     let mut option = OpenOptions::new();
     option.write(true).read(true).create(true);
     let file = match option.open(file_path.clone()) {
@@ -83,7 +81,6 @@ pub fn download_file(field: Field) -> impl Future<Item = String, Error = actix_w
     };
 
     let content_type = field.content_type();
-    log::info!("{:?}", content_type);
     Either::B(
         field
             .fold(
@@ -91,7 +88,6 @@ pub fn download_file(field: Field) -> impl Future<Item = String, Error = actix_w
                 move |(mut file, file_path, mut acc), bytes| {
                     // fs operations are blocking, we have to execute writes
                     // on threadpool
-                    log::info!("HERE");
                     actix_web::web::block(move || {
                         file.write_all(bytes.as_ref()).map_err(|e| {
                             println!("file.write_all failed: {:?}", e);
