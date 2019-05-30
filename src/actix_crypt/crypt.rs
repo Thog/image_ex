@@ -35,11 +35,13 @@ lazy_static! {
 }
 
 const MAGIC_SIZE: usize = 0x8;
-const RESERVED_SIZE: usize = 0x8;
+const UNPADDED_SIZE: usize = 0x8;
 const INITIAL_VECTOR_SIZE: usize = 0x10;
 const HASH_SIZE: usize = 0x20;
 
-pub const HEADER_SIZE: usize = MAGIC_SIZE + RESERVED_SIZE + INITIAL_VECTOR_SIZE + HASH_SIZE;
+const LEGACY_HEADER_PADDING: u64 = 0x30303030_30303030;
+
+pub const HEADER_SIZE: usize = MAGIC_SIZE + UNPADDED_SIZE + INITIAL_VECTOR_SIZE + HASH_SIZE;
 
 const BUFFER_SIZE: usize = 65_536;
 
@@ -47,14 +49,14 @@ pub type BlobMagic = [u8; MAGIC_SIZE];
 pub type BlobInitialVector = [u8; INITIAL_VECTOR_SIZE];
 pub type BlobHash = [u8; HASH_SIZE];
 
-pub struct EncryptedBlob<T: Read + Seek + Sized> {
+pub struct EncryptedBlob<T: Read + Write + Seek + Sized> {
     accessor: T,
     size: u64,
     cipher: Option<Aes256Cbc>,
     iv: Option<BlobInitialVector>,
 }
 
-impl<T: Read + Seek + Sized> EncryptedBlob<T> {
+impl<T: Read + Write + Seek + Sized> EncryptedBlob<T> {
     pub fn from(accessor: T) -> std::io::Result<Self> {
         let mut accessor = accessor;
 
@@ -112,6 +114,8 @@ impl<T: Read + Seek + Sized> EncryptedBlob<T> {
 
             let mut hasher = Sha256::new();
 
+            let mut decrypted_size = 0u64;
+
             while index != 0 {
                 let slice = if index < BUFFER_SIZE {
                     &mut internal_buffer[..index]
@@ -128,12 +132,25 @@ impl<T: Read + Seek + Sized> EncryptedBlob<T> {
 
                 index -= slice.len();
 
-                hasher.input(&slice[..read_len]);
+                let slice = &slice[..read_len];
+                decrypted_size += slice.len() as u64;
+                hasher.input(slice);
             }
 
             let computed_hash = hasher.result();
             if let Ok(hash) = self.hash() {
-                return computed_hash == GenericArray::from(hash);
+                if computed_hash == GenericArray::from(hash) {
+                    if let Ok(unpadded_size_header) = self.get_unpadded_size_from_header() {
+                        // If we have a legacy padding, replace it to use the new format!
+                        if unpadded_size_header == LEGACY_HEADER_PADDING {
+                            if self.set_unpadded_size_from_header(decrypted_size).is_ok() {
+                                return true;
+                            }
+                        } else {
+                            return unpadded_size_header == decrypted_size;
+                        }
+                    }
+                }
             }
         }
 
@@ -152,7 +169,7 @@ impl<T: Read + Seek + Sized> EncryptedBlob<T> {
     pub fn initial_vector(&mut self) -> std::io::Result<BlobInitialVector> {
         let mut result = [0; INITIAL_VECTOR_SIZE];
 
-        self.accessor.seek(SeekFrom::Start((MAGIC_SIZE + RESERVED_SIZE) as u64))?;
+        self.accessor.seek(SeekFrom::Start((MAGIC_SIZE + UNPADDED_SIZE) as u64))?;
         self.accessor.read_exact(&mut result)?;
 
         Ok(result)
@@ -162,7 +179,7 @@ impl<T: Read + Seek + Sized> EncryptedBlob<T> {
         let mut result = [0; HASH_SIZE];
 
         self.accessor
-            .seek(SeekFrom::Start((MAGIC_SIZE + RESERVED_SIZE + INITIAL_VECTOR_SIZE) as u64))?;
+            .seek(SeekFrom::Start((MAGIC_SIZE + UNPADDED_SIZE + INITIAL_VECTOR_SIZE) as u64))?;
         self.accessor.read_exact(&mut result)?;
 
         Ok(result)
@@ -189,7 +206,29 @@ impl<T: Read + Seek + Sized> EncryptedBlob<T> {
         }
     }
 
+    fn get_unpadded_size_from_header(&mut self) -> std::io::Result<u64>  {
+        let mut result = [0; UNPADDED_SIZE];
+
+        self.accessor
+            .seek(SeekFrom::Start(MAGIC_SIZE as u64))?;
+        self.accessor.read_exact(&mut result)?;
+        
+        Ok(u64::from_le_bytes(result))
+    }
+
+    fn set_unpadded_size_from_header(&mut self, size: u64) -> std::io::Result<()> {
+        self.accessor.seek(SeekFrom::Start(MAGIC_SIZE as u64))?;
+        self.accessor.write_all(&u64::to_le_bytes(size))
+    }
+
     pub fn get_unpadded_size(&mut self) -> std::io::Result<u64> {
+        let unpadded_size_header = self.get_unpadded_size_from_header()?;
+
+        if unpadded_size_header != LEGACY_HEADER_PADDING {
+            return Ok(unpadded_size_header);
+        }
+
+        // If we don't have the unpadded size in the header, we need to compute it, sadly
         let padded_size = self.get_padded_size();
         let block_size = <Aes256 as BlockCipher>::BlockSize::to_usize();
 
@@ -211,7 +250,11 @@ impl<T: Read + Seek + Sized> EncryptedBlob<T> {
 
         self.cipher = Some(cipher);
 
-        Ok(padded_size - u64::from(data[data.len() - 1]))
+        // Update the file header
+        let unpadded_size = padded_size - u64::from(data[data.len() - 1]);
+        self.set_unpadded_size_from_header(unpadded_size)?;
+
+        Ok(unpadded_size)
     }
 
     pub fn get_padded_size(&self) -> u64 {
@@ -223,7 +266,7 @@ impl<T: Read + Seek + Sized> EncryptedBlob<T> {
     }
 }
 
-impl<T: Read + Seek + Sized> Seek for EncryptedBlob<T> {
+impl<T: Read + Write + Seek + Sized> Seek for EncryptedBlob<T> {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         let mut current_pos = self.accessor.seek(SeekFrom::Current(0))? as i64;
 
@@ -312,7 +355,7 @@ pub fn align_up<T: Num + Not<Output = T> + BitAnd<Output = T> + Copy>(addr: T, a
     align_down(addr + (align - T::one()), align)
 }
 
-impl<T: Read + Seek + Sized> Read for EncryptedBlob<T> {
+impl<T: Read + Write + Seek + Sized> Read for EncryptedBlob<T> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // Cipher is gone, we are done
         if self.cipher.is_none() {

@@ -65,7 +65,6 @@ pub fn download_file(field: Field) -> impl Future<Item = String, Error = actix_w
         Err(e) => return Either::A(err(ErrorInternalServerError(e))),
     };
 
-    let content_type = field.content_type();
     Either::B(
         field
             .fold(
@@ -103,7 +102,11 @@ pub fn download_file(field: Field) -> impl Future<Item = String, Error = actix_w
                     bucket_path.push(file_name);
 
                     std::fs::copy(file_path.clone(), bucket_path)
-                        .map_err(ErrorInternalServerError)?;
+                        .map_err(|e| {
+                            std::fs::remove_file(file_path.clone()).ok();
+                            ErrorInternalServerError(e)
+                        })?;
+
                     std::fs::remove_file(file_path.clone())?;
                     return Ok(format!(
                         "{}/{}\n",
@@ -112,6 +115,7 @@ pub fn download_file(field: Field) -> impl Future<Item = String, Error = actix_w
                     ));
                 }
 
+                std::fs::remove_file(file_path.clone()).ok();
                 Err(ErrorUnauthorized("Authentification failed"))
             })
             .map_err(|e| {

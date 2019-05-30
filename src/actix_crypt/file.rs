@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::io;
 use std::path::Path;
 
@@ -65,7 +66,9 @@ impl ChunkedCryptFile {
     }
 
     pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        Self::from_file(File::open(&path)?, path)
+        let mut option = OpenOptions::new();
+        option.write(true).read(true);
+        Self::from_file(option.open(&path)?, path)
     }
 }
 
